@@ -1,0 +1,242 @@
+[ 서브쿼리 & 조인 ]
+
+
+# 1번 : Zlotkey사원과 같은 부서에 근무하는 사원 데이터 검색 (Zlotkey사원은 제외)
+
+* 서브쿼리
+
+SELECT last_name, hire_date
+FROM employees
+WHERE department_id = (select department_id
+                       FROM employees
+                       where last_name = 'Zlotkey')
+AND last_name <> 'Zlotkey';
+
+
+* 조인
+
+SELECT last_name, hire_date
+FROM employees a
+    JOIN departments b
+    ON a.department_id = b.department_id
+WHERE b.department_id = (select department_id
+                       FROM employees
+                       where last_name = 'Zlotkey');
+
+=> 조인에서도 상관서브쿼리를 쓸 수 밖에 없는데, 조인을 쓰는 의미가 있을까?
+(조인에서 상관서브쿼리 쓰지 않으려면
+Zlotkey의 부서ID가 80이라는걸 미리 알고있어야하는데...)
+
+
+# 2번 : Zlotkey사원과 같은 부서에 근무하는 사원 데이터 검색 (Zlotkey사원은 제외)
+
+* 서브쿼리
+
+SELECT employee_id, last_name, salary
+FROM employees
+WHERE salary > (select avg(salary)
+                from employees)
+ORDER BY salary ASC;
+
+
+* 조인
+???
+=> 테이블 한개만 쓸수있는데 조인을 도대체 어떻게 써야하는가??
+
+
+# 3번 : last_name에 'u' 문자가 포함되어 있는 사원들과 같은 부서에서 일하는 사원 검색
+
+* 서브쿼리
+
+- 오답
+SELECT employee_id, last_name
+FROM employees
+WHERE department_id = (select department_id
+                       from employees
+                       where last_name like '%u%');
+-> 컴파일 에러 : 하나의 행(department_id)과 여러개의 행(서브쿼리문)을 비교하려고함
+
+- 정답
+SELECT employee_id, last_name
+FROM employees
+WHERE department_id in (select department_id
+                       from employees
+                       where last_name like '%u%');
+
+
+* 조인
+???
+=> 테이블 한개만 쓸수있는데 조인을 도대체 어떻게 써야하는가??
+
+
+# 4번 : location ID 가 1700인 부서에 근무하는 사원 검색
+
+* 서브쿼리
+
+SELECT last_name, a.department_id, job_id
+FROM employees a
+WHERE department_id in (select department_id
+                       from departments b
+                       where location_id = 1700
+                       and a.department_id = b.department_id)
+ORDER BY a.department_id ASC;
+
+
+* 조인
+
+SELECT last_name, a.department_id, job_id
+FROM employees a
+    JOIN departments b
+    ON a.department_id = b.department_id
+WHERE b.location_id = 1700
+ORDER BY a.department_id ASC;
+
+
+# 5번 : King사원에게 직접 보고하는 모든 사원 검색
+(King사원을 관리자로 가지는 모든 사원 검색)
+
+* 서브쿼리
+
+SELECT last_name, salary
+FROM employees
+WHERE manager_id = (select employee_id
+                    from employees
+                    where last_name = 'King');
+
+* 조인
+???
+=> 테이블 한개만 쓸수있는데 조인을 도대체 어떻게 써야하는가??
+
+
+# 6번 : 'Executive' 부서에 근무하는 사원 검색
+
+* 서브쿼리
+
+SELECT department_id, last_name, job_id
+FROM employees a
+WHERE department_id = (select department_id
+                       from departments b
+                       where department_name = 'Executive');
+
+* 조인
+
+SELECT a.department_id, last_name, job_id
+FROM employees a
+    JOIN departments b
+    ON a.department_id = b.department_id
+WHERE b.department_name = 'Executive';
+
+
+# 7번 : lastname에 'u'가 포함된 사원들과 같은 부서에 근무하면서
+전체 사원의 평균월급보다 월급을 많이 받는 사원 검색
+
+* 서브쿼리
+
+SELECT employee_id, last_name, salary
+FROM employees
+WHERE department_id IN (select department_id
+                       from employees
+                       where last_name like '%u%')
+AND salary > (select avg(salary)
+              from employees) ;
+
+
+* 조인
+???
+=> 테이블 한개만 쓸수있는데 조인을 도대체 어떻게 써야하는가??
+
+
+
+[ 집합 연산자 ]
+
+
+# 1번 : job ID가 'ST_CLERK'인 직무가 존재하지 않는 부서를 검색
+
+SELECT department_id
+FROM departments
+MINUS
+SELECT department_id
+FROM employees
+WHERE job_id = 'ST_CLERK';
+
+
+# 2번 : 부서가 없는 country ID와 Name 출력 (countries와 locations 테이블 참조)
+
+- 오답
+
+SELECT country_id "CO", country_name
+FROM countries
+MINUS
+SELECT country_id, to_char(null)
+FROM locations;
+
+-> countries의 모든 country_id와 country_name이 출력되어버렸다.
+to_char(null)때문에 그런 것 같다.
+테이블 countries에서는 country_id의 country_name으로 null값을 가지는 레이블이 한개도 존재하지 않는다.
+서로 겹치는것이 없으니, 차집합을 해도 동일한 값이 출력된다.
+( A∩B = Φ 일때, A-B = A )
+
+- 정답
+
+SELECT country_id "CO", country_name
+FROM countries
+MINUS
+SELECT a.country_id, b.country_name
+FROM locations a
+    JOIN countries b
+    ON a.country_id = b.country_id;
+
+-> 테이블locations의 행country_id에 대응하는 country_name이 존재하는
+테이블을 새로 만들어서(JOIN사용) 해결!
+
+
+# 3번 : 10, 50, 20 부서번호 순으로 JOB ID와 Department ID 순으로 출력
+
+SELECT job_id, department_id
+FROM employees
+WHERE department_id = 10
+UNION
+SELECT job_id, department_id
+FROM employees
+WHERE department_id = 50
+UNION
+SELECT job_id, department_id
+FROM employees
+WHERE department_id = 20;
+
+
+# 4번 : 처음 일했던 부서로 다시 돌아온 직원들의 employee_id와 job_id를 출력하라.
+
+SELECT employee_id, job_id
+FROM job_history
+INTERSECT
+SELECT employee_id, job_id
+FROM employees
+ORDER BY employee_id ASC;
+
+
+# 5번 : HR부서에서 다음을 요구한다.
+1) 부서에 속하지 않은 직원들까지 모두 포함된 last_name행과 department_id행으로 이루어진 테이블
+2) 직원들이 존재하지 않는 부서까지 모두 포함된 department_id행과 department_name행으로 이루어진 테이블
+위 작업들을 수행할 수 있는 compound query를 작성하라.
+
+SELECT last_name, department_id, TO_CHAR(NULL)
+FROM employees
+UNION ALL
+SELECT TO_CHAR(NULL) "last_name", department_id, department_name "TO_CHAR(NULL)"
+FROM departments;
+
+
+
+[ DML (INSERT, UPDATE, DELETE) ]
+
+
+
+
+
+
+
+
+
+
+
